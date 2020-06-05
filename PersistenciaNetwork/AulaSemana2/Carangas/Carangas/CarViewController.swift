@@ -8,7 +8,6 @@
 
 import UIKit
 import WebKit
-
 class CarViewController: UIViewController {
 
     var car: Car!
@@ -17,10 +16,9 @@ class CarViewController: UIViewController {
     @IBOutlet weak var lbBrand: UILabel!
     @IBOutlet weak var lbGasType: UILabel!
     @IBOutlet weak var lbPrice: UILabel!
-    
     @IBOutlet weak var webView: WKWebView!
     @IBOutlet weak var aivLoading: UIActivityIndicatorView!
-
+    
     // MARK: - Super Methods
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -35,18 +33,17 @@ class CarViewController: UIViewController {
         lbPrice.text = "\(car.price)"
         
         // Configurando um requisição simples e exibindo na WebKit
-        let name = (car.name + "+" + car.brand).replacingOccurrences(of: " ", with: "+")
-        let urlString = "https://www.google.com.br/search?q=\(name)&tbm=isch"
-        let url = URL(string: urlString)!
-        let request = URLRequest(url: url)
+         let name = (car.name + "+" + car.brand).replacingOccurrences(of: " ", with: "+")
+         let urlString = "https://www.google.com.br/search?q=\(name)&tbm=isch"
+         let url = URL(string: urlString)!
+         let request = URLRequest(url: url)
         
-        // permite usar usar gestos para navegar
-        webView.allowsBackForwardNavigationGestures = true
-        webView.allowsLinkPreview = true // preview usando 3D touch
-        webView.navigationDelegate = self
-        webView.uiDelegate = self
-        webView.load(request)
-        aivLoading.startAnimating() // pode-se usar manualmente ou pelo congig do componente Activity Indicator
+         // permite usar usar gestos para navegar
+         webView.allowsBackForwardNavigationGestures = true
+         webView.allowsLinkPreview = true // preview usando 3D touch
+         webView.navigationDelegate = self
+         webView.uiDelegate = self
+         webView.load(request)
     }
     
     
@@ -55,9 +52,7 @@ class CarViewController: UIViewController {
         vc?.car = car
     }
 
-} // fim da classe
-
-
+}
 
 extension CarViewController: WKNavigationDelegate, WKUIDelegate {
    

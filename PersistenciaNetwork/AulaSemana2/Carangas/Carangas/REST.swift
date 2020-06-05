@@ -7,7 +7,7 @@
 //
 
 import Foundation
-
+import Alamofire
 
 enum CarError {
     case url
@@ -42,127 +42,75 @@ final class REST {
     }()
     
     
-    class func loadBrands(onComplete: @escaping ([Brand]?) -> Void) {
-
-       // URL TABELA FIPE
-
-       let urlFipe = "https://fipeapi.appspot.com/api/1/carros/marcas.json"
-       guard let url = URL(string: urlFipe) else {
-           onComplete(nil)
-           return
-       }
-       // tarefa criada, mas nao processada
-       let dataTask = session.dataTask(with: url) { (data: Data?, response: URLResponse?, error: Error?) in
-           if error == nil {
-               guard let response = response as? HTTPURLResponse else {
-                   onComplete(nil)
-                   return
-               }
-               if response.statusCode == 200 {
-                   // obter o valor de data
-                   guard let data = data else {
-                       onComplete(nil)
-                       return
-                   }
-                   do {
-                     let brands = try JSONDecoder().decode([Brand].self, from: data)
-                       onComplete(brands)
-                   } catch {
-                       // algum erro ocorreu com os dados
-                       onComplete(nil)
-                   }
-               } else {
-                   onComplete(nil)
-               }
-           } else {
-               onComplete(nil)
-           }
-       }
-       // start request
-       dataTask.resume()
-        
-    }
-    
-    
-    
     class func loadCars(onComplete: @escaping ([Car]) -> Void, onError: @escaping (CarError) -> Void) {
         
         guard let url = URL(string: basePath) else {
             onError(.url)
             return
         }
-        
-        
-        let task = session.dataTask(with: url) { (data: Data?, response: URLResponse?, error: Error?) in
-            // 1
-            if error == nil {
-                // 2
-                guard let response = response as? HTTPURLResponse else {
-                    onError(.noResponse)
+        AF.request(url).response { response in
+            do{
+                
+                if response.data == nil{
+                    onError(.noData)
                     return
                 }
-                if response.statusCode == 200 {
+                
+                if let error = response.error{
                     
-                    // servidor respondeu com sucesso :)
-                    // 3
-                    // obter o valor de data
-                    guard let data = data else {
-                        onError(.noData)
+                    if error.isSessionTaskError{
+                        onError(.taskError(error: error))
                         return
                     }
-                    
-                    do {
-                        let cars = try JSONDecoder().decode([Car].self, from: data)
-                        // pronto para reter dados
-                        onComplete(cars)
-                        
-                        
-                    } catch {
-                        // algum erro ocorreu com os dados
-                        onError(.invalidJSON)
-                        print(error.localizedDescription)
+                    if error.isInvalidURLError {
+                        onError(.url)
+                        return
+                    }
+                    if error._code == NSURLErrorTimedOut {
+                        onError(.noResponse)
                     }
                     
-                } else {
-                    onError(.responseStatusCode(code: response.statusCode))
+                    if error._code != 200 {
+                        onError(.responseStatusCode(code: error._code))
+                    }
                 }
                 
-            } else {
-                onError(.taskError(error: error!))
-                
+                let cars = try JSONDecoder().decode([Car].self, from: response.data!)
+                onComplete(cars)
+            }catch is DecodingError {
+                onError(.invalidJSON)
+            }catch{
+                onError(.taskError(error: error))
             }
         }
-        task.resume()
-        
         
     }
     
     
     
-    class func save(car: Car, onComplete: @escaping (Bool) -> Void ) {
-        applyOperation(car: car, operation: .save, onComplete: onComplete)
+    class func save(car: Car, onComplete: @escaping (Bool) -> Void, onError: @escaping (CarError) -> Void ) {
+        applyOperation(car: car, operation: .save, onComplete: onComplete, onError: onError)
     }
     
-    class func update(car: Car, onComplete: @escaping (Bool) -> Void ) {
-        applyOperation(car: car, operation: .update, onComplete: onComplete)
+    class func update(car: Car, onComplete: @escaping (Bool) -> Void, onError: @escaping (CarError) -> Void ) {
+        applyOperation(car: car, operation: .update, onComplete: onComplete, onError: onError)
     }
     
-    class func delete(car: Car, onComplete: @escaping (Bool) -> Void ) {
-        applyOperation(car: car, operation: .delete, onComplete: onComplete)
+    class func delete(car: Car, onComplete: @escaping (Bool) -> Void, onError: @escaping (CarError) -> Void ) {
+        applyOperation(car: car, operation: .delete, onComplete: onComplete, onError: onError )
     }
     
     
     
-    private class func applyOperation(car: Car, operation: RESTOperation , onComplete: @escaping (Bool) -> Void ) {
-        
+    private class func applyOperation(car: Car, operation: RESTOperation , onComplete: @escaping (Bool) -> Void, onError: @escaping (CarError) -> Void ) {
         // o endpoint do servidor para update é: URL/id
         let urlString = basePath + "/" + (car._id ?? "")
         
         guard let url = URL(string: urlString) else {
-            onComplete(false)
+            onError(.url)
             return
         }
-        var request = URLRequest(url: url)
+        
         var httpMethod: String = ""
         
         switch operation {
@@ -173,34 +121,95 @@ final class REST {
         case .update:
             httpMethod = "PUT"
         }
-        request.httpMethod = httpMethod
         
         // transformar objeto para um JSON, processo contrario do decoder -> Encoder
         guard let json = try? JSONEncoder().encode(car) else {
-            onComplete(false)
+            onError(.invalidJSON)
             return
         }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = httpMethod
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = json
         
-        let dataTask = session.dataTask(with: request) { (data: Data?, response: URLResponse?, error: Error?) in
-            if error == nil {
-                // verificar e desembrulhar em uma unica vez
-                guard let response = response as? HTTPURLResponse, response.statusCode == 200, let _ = data else {
-                    onComplete(false)
+        AF.request(request).response { response in
+            if let error = response.error{
+                onError(.responseStatusCode(code: error._code))
+                return
+            }
+            
+            onComplete(true)
+        }
+        
+    }
+    
+    // o metodo pode retornar um array de nil se tiver algum erro
+    class func loadBrands(onComplete: @escaping ([Brand]?) -> Void, onError: @escaping (CarError) -> Void) {
+        
+        // URL TABELA FIPE
+        let urlFipe = "https://fipeapi.appspot.com/api/1/carros/marcas.json"
+        guard let url = URL(string: urlFipe) else {
+            onError(.url)
+            return
+        }
+        AF.request(url).response {response in
+            
+            do{
+                if response.data == nil{
+                    onError(.noData)
                     return
                 }
                 
-                // ok
-                onComplete(true)
+                if let error = response.error{
+                    if error.isSessionTaskError {
+                        onError(.taskError(error: error))
+                        return
+                    }
+                    if error.isInvalidURLError {
+                        onError(.url)
+                        return
+                    }
+                    if error._code == NSURLErrorTimedOut {
+                        onError(.noResponse)
+                        return
+                    }
+                    
+                    if error._code != 200 {
+                        onError(.responseStatusCode(code: error._code))
+                        return
+                    }
+                }
                 
-            } else {
-                onComplete(false)
+                let brands = try JSONDecoder().decode([Brand].self, from: response.data!)
+                onComplete(brands)
+                
+            }catch{
+                onError(.taskError(error: error))
             }
         }
         
-        dataTask.resume()
     }
     
-    
-    
+    class func friendfyError(carError: CarError) -> String {
+        
+        switch carError {
+        case .invalidJSON:
+            return "JSON inválido"
+        case .noData:
+            return "Nenhum dado foi retornado"
+        case .noResponse:
+            return "Tempo máximo da requisição excedido"
+        case .url:
+            return "Requisição inválida"
+        case .taskError(let error):
+            return "\(error.localizedDescription)"
+        case .responseStatusCode(let code):
+            if code != 200 {
+                return "Problema com o servidor. :( \nError:\(code)"
+            }
+        }
+        
+        return ""
+    }
 } // fim da classe
