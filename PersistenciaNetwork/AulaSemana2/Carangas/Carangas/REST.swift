@@ -135,8 +135,23 @@ final class REST {
         
         AF.request(request).response { response in
             if let error = response.error{
-                onError(.responseStatusCode(code: error._code))
-                return
+                    if error.isSessionTaskError {
+                        onError(.taskError(error: error))
+                        return
+                    }
+                    if error.isInvalidURLError {
+                        onError(.url)
+                        return
+                    }
+                    if error._code == NSURLErrorTimedOut {
+                        onError(.noResponse)
+                        return
+                    }
+                    
+                    if error._code != 200 {
+                        onError(.responseStatusCode(code: error._code))
+                        return
+                    }
             }
             
             onComplete(true)
