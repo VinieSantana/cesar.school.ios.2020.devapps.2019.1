@@ -7,14 +7,22 @@
 //
 
 import UIKit
+import CoreData
 
 class ConsolesTableViewController: UITableViewController {
 
     
+    var fetchedResultController:NSFetchedResultsController<Console>!
     
     override func viewDidLoad() {
         super.viewDidLoad()
 
+    }
+    
+    
+    override func viewWillAppear(_ animated: Bool) {
+           super.viewWillAppear(animated)
+           // se ocorrer mudancas na entidade Console, a atualização automatica não irá ocorrer porque nosso NSFetchResultsController esta monitorando a entidade Game. Caso tiver mudanças na entidade Console precisamos atualizar a tela com a tabela de alguma forma: reloadData :)
         loadConsoles()
     }
     
@@ -38,18 +46,19 @@ class ConsolesTableViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath) as! ConsoleTableViewCell
+        
         let console = ConsolesManager.shared.consoles[indexPath.row]
-        cell.textLabel?.text = console.name
+        
+        cell.prepare(with: console)
         return cell
     }
     
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
          
-        let console = ConsolesManager.shared.consoles[indexPath.row]
-        showAlert(with: console)
-        
+//        let console = ConsolesManager.shared.consoles[indexPath.row]
+//
         // deselecionar atual cell
         tableView.deselectRow(at: indexPath, animated: false)
      }
@@ -62,7 +71,19 @@ class ConsolesTableViewController: UITableViewController {
         tableView.deleteRows(at: [indexPath], with: .fade)
     }
     
-
+    // In a storyboard-based application, you will often want to do a little preparation before navigation
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        // Get the new view controller using segue.destination.
+        // Pass the selected object to the new view controller.
+        
+        if segue.identifier! == "editConsole" {
+            print("editConsole")
+            let vc = segue.destination as! AddEditConsoleViewController
+            
+                vc.console = ConsolesManager.shared.consoles[tableView.indexPathForSelectedRow!.row]
+        }
+            
+    }
     /*
     // Override to support rearranging the table view.
     override func tableView(_ tableView: UITableView, moveRowAt fromIndexPath: IndexPath, to: IndexPath) {
@@ -88,42 +109,6 @@ class ConsolesTableViewController: UITableViewController {
     }
     */
 
-    func showAlert(with console: Console?) {
-        let title = console == nil ? "Adicionar" : "Editar"
-        let alert = UIAlertController(title: title + " plataforma", message: nil, preferredStyle: .alert)
-        
-        alert.addTextField(configurationHandler: { (textField) in
-            textField.placeholder = "Nome da plataforma"
-            
-            if let name = console?.name {
-                textField.text = name
-            }
-        })
-        
-        alert.addAction(UIAlertAction(title: title, style: .default, handler: {(action) in
-            let console = console ?? Console(context: self.context)
-            console.name = alert.textFields?.first?.text
-            do {
-                try self.context.save()
-                self.loadConsoles()
-            } catch {
-                print(error.localizedDescription)
-            }
-        }))
-        
-        alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel, handler: nil))
-        alert.view.tintColor = UIColor(named: "second")
-        
-        present(alert, animated: true, completion: nil)
-    }
-    
-    
-    @IBAction func addConsole(_ sender: UIBarButtonItem) {
-        print("addConsole")
-        
-        // nil indica que sera criado uma plataforma nova
-        showAlert(with: nil)
-    }
     
     
 } // fim da classe
